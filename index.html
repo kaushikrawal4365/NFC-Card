@@ -129,6 +129,15 @@
     .foot{display:flex;justify-content:space-between;gap:20px;align-items:center}
     .foot img{height:46px;background:#fff;border-radius:8px;padding:3px}
     .foot small{font-size:12px}
+    .legal-links{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;font-size:12px}
+    .legal-links a{color:#aab6ca;text-decoration:underline}
+    .cookie-banner{position:fixed;left:20px;right:20px;bottom:20px;z-index:90;display:none;align-items:center;justify-content:space-between;gap:20px;padding:18px 20px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 16px 45px rgba(7,21,47,.22)}
+    .cookie-banner.visible{display:flex}
+    .cookie-copy{color:var(--muted);font-size:13px;max-width:720px}
+    .cookie-copy strong{display:block;color:var(--navy);font-size:14px;margin-bottom:3px}
+    .cookie-actions{display:flex;gap:10px;flex-shrink:0}
+    .cookie-actions .btn{padding:10px 14px;font-size:13px}
+    @media(max-width:620px){.cookie-banner{left:12px;right:12px;bottom:12px;display:none;flex-direction:column;align-items:stretch;gap:12px}.cookie-actions{justify-content:flex-end}.cookie-actions .btn{flex:1}.legal-links{gap:6px 12px}}
     .mobile-menu{display:none}
     @media(max-width:1024px){
       .pricing{grid-template-columns:repeat(2,minmax(0,1fr));}
@@ -336,9 +345,29 @@
 <footer>
   <div class="container foot">
     <img class="brand-image" src="bb2056b6-76ee-4809-bf43-c19167f67ec0.jpg" alt="AlwaysTap logo">
-    <small>© 2026 AlwaysTap. One Tap. Endless Connections. <a href="legal.html">Privacy, terms and policies</a></small>
+    <div>
+      <small>© 2026 AlwaysTap. One Tap. Endless Connections.</small>
+      <div class="legal-links" aria-label="Legal links">
+        <a href="legal.html#privacy">Privacy</a>
+        <a href="legal.html#terms">Terms</a>
+        <a href="legal.html#shipping">Shipping</a>
+        <a href="legal.html#refunds">Refunds</a>
+        <a href="legal.html#cookies">Cookies</a>
+        <a href="legal.html#contact">Contact</a>
+      </div>
+    </div>
   </div>
 </footer>
+<aside class="cookie-banner" id="cookie-banner" aria-label="Cookie notice" role="dialog" aria-live="polite">
+  <div class="cookie-copy">
+    <strong>Privacy choices</strong>
+    We use essential browser storage to remember this choice. We do not use advertising or analytics cookies on this website. <a href="legal.html#cookies">Read the cookie policy</a>.
+  </div>
+  <div class="cookie-actions">
+    <button class="btn btn-light" id="cookie-decline" type="button">Decline</button>
+    <button class="btn btn-primary" id="cookie-accept" type="button">Accept</button>
+  </div>
+</aside>
 <div class="lead-modal" id="lead-modal" role="dialog" aria-modal="true" aria-labelledby="lead-title" aria-hidden="true">
   <div class="lead-dialog">
     <button class="modal-close" type="button" aria-label="Close order form">&times;</button>
@@ -398,6 +427,20 @@
   }, { threshold: 0.15 });
 
   revealItems.forEach((item) => revealObserver.observe(item));
+
+  const cookieBanner = document.getElementById('cookie-banner');
+  const cookieChoice = 'alwaysTapCookieConsent';
+  if (!document.cookie.includes(`${cookieChoice}=`)) {
+    cookieBanner.classList.add('visible');
+  }
+
+  function saveCookieChoice(value) {
+    document.cookie = `${cookieChoice}=${value}; max-age=31536000; path=/; SameSite=Lax`;
+    cookieBanner.classList.remove('visible');
+  }
+
+  document.getElementById('cookie-accept').addEventListener('click', () => saveCookieChoice('accepted'));
+  document.getElementById('cookie-decline').addEventListener('click', () => saveCookieChoice('declined'));
 
   const leadModal = document.getElementById('lead-modal');
   const leadForm = document.getElementById('lead-form');
