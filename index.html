@@ -97,8 +97,13 @@
     .lead-dialog p{color:var(--muted);font-size:14px;margin-bottom:22px}
     .lead-form{display:grid;gap:14px}
     .lead-form label{font-size:13px;font-weight:700;color:var(--navy)}
-    .lead-form input{width:100%;margin-top:6px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;font:inherit;color:var(--text)}
+    .lead-form input[type="text"], .lead-form input[type="tel"], .lead-form input[type="number"]{width:100%;margin-top:6px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;font:inherit;color:var(--text)}
     .lead-form input:focus{outline:2px solid rgba(22,119,255,.25);border-color:var(--blue)}
+    .bulk-options{display:grid;gap:10px;margin-top:6px}
+    .bulk-option{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#f8faff}
+    .bulk-option input{margin:0;width:auto;accent-color:var(--blue)}
+    .bulk-option span{font-size:14px;font-weight:600;color:var(--text)}
+    .lead-form input[disabled]{background:#eef2f7;cursor:not-allowed;opacity:.7}
     .lead-error{min-height:18px;color:#c0392b;font-size:12px}
     .modal-close{position:absolute;top:14px;right:14px;border:0;background:transparent;color:var(--muted);font-size:25px;line-height:1;cursor:pointer}
     .modal-close:hover{color:var(--navy)}
@@ -343,8 +348,30 @@
         <input id="lead-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" required pattern="[0-9+()\- ]{7,20}" placeholder="Your phone number">
       </label>
       <label id="quantity-row" style="display:none;">
-        Number of cards
-        <input id="lead-quantity" name="quantity" type="number" min="1" step="1" placeholder="e.g. 10" inputmode="numeric">
+        Select quantity
+        <div class="bulk-options" id="bulk-options">
+          <label class="bulk-option">
+            <input type="radio" name="bulk-quantity" value="20" data-price="₹5,000" checked>
+            <span>20 pieces — ₹5,000</span>
+          </label>
+          <label class="bulk-option">
+            <input type="radio" name="bulk-quantity" value="50" data-price="₹14,000">
+            <span>50 pieces — ₹14,000</span>
+          </label>
+          <label class="bulk-option">
+            <input type="radio" name="bulk-quantity" value="100" data-price="₹20,000">
+            <span>100 pieces — ₹20,000</span>
+          </label>
+          <label class="bulk-option">
+            <input type="radio" name="bulk-quantity" value="200" data-price="₹30,000">
+            <span>200 pieces — ₹30,000</span>
+          </label>
+          <label class="bulk-option">
+            <input type="radio" name="bulk-quantity" value="custom">
+            <span>Custom quantity</span>
+          </label>
+        </div>
+        <input id="lead-quantity" name="quantity" type="number" min="1" step="1" placeholder="Enter custom quantity" inputmode="numeric" disabled>
       </label>
       <div class="lead-error" id="lead-error" aria-live="polite"></div>
       <button class="btn btn-primary" type="submit">Continue to WhatsApp →</button>
@@ -370,12 +397,23 @@
   const leadError = document.getElementById('lead-error');
   const leadQuantity = document.getElementById('lead-quantity');
   const quantityRow = document.getElementById('quantity-row');
+  const bulkOptions = document.querySelectorAll('input[name="bulk-quantity"]');
   const closeLeadModal = leadModal.querySelector('.modal-close');
   const leadEndpoint = 'https://script.google.com/macros/s/AKfycbyrzWYHBnrIQ-XRw8NZSJGZ63vLh_uxyJhxQFuExRwgo76tvCuChgBGHgySIUx561yT/exec';
   let selectedPackageMessage = '';
   let selectedPackageName = '';
   let selectedAmount = '';
   let isCustomOrder = false;
+
+  function syncBulkInputState() {
+    const selected = document.querySelector('input[name="bulk-quantity"]:checked');
+    const isCustomSelected = selected && selected.value === 'custom';
+    leadQuantity.disabled = !isCustomSelected;
+    leadQuantity.required = isCustomSelected;
+    if (!isCustomSelected) {
+      leadQuantity.value = '';
+    }
+  }
 
   function openLeadModal(event) {
     event.preventDefault();
@@ -386,10 +424,13 @@
     leadError.textContent = '';
     if (isCustomOrder) {
       quantityRow.style.display = 'block';
-      leadQuantity.required = true;
-      leadQuantity.value = '';
+      bulkOptions.forEach((option) => {
+        option.checked = option.value === '20';
+      });
+      syncBulkInputState();
     } else {
       quantityRow.style.display = 'none';
+      leadQuantity.disabled = true;
       leadQuantity.required = false;
       leadQuantity.value = '';
     }
@@ -404,9 +445,17 @@
     leadModal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('modal-open');
     quantityRow.style.display = 'none';
+    leadQuantity.disabled = true;
     leadQuantity.required = false;
     leadQuantity.value = '';
+    bulkOptions.forEach((option) => {
+      option.checked = option.value === '20';
+    });
   }
+
+  bulkOptions.forEach((option) => {
+    option.addEventListener('change', syncBulkInputState);
+  });
 
   document.querySelectorAll('.whatsapp-order').forEach((button) => {
     button.addEventListener('click', openLeadModal);
@@ -423,14 +472,30 @@
     if (!leadForm.reportValidity()) return;
     const name = leadName.value.trim();
     const phone = leadPhone.value.trim();
-    const requestedQuantity = isCustomOrder ? Number(leadQuantity.value.trim()) : null;
+    let quantity = 1;
+    let amount = selectedAmount;
 
-    if (isCustomOrder && (!requestedQuantity || requestedQuantity < 1)) {
-      leadError.textContent = 'Please enter a valid number of cards.';
-      return;
+    if (isCustomOrder) {
+      const selectedOption = document.querySelector('input[name="bulk-quantity"]:checked');
+      if (!selectedOption) {
+        leadError.textContent = 'Please select a quantity option.';
+        return;
+      }
+
+      if (selectedOption.value === 'custom') {
+        quantity = Number(leadQuantity.value.trim());
+        amount = `Custom (${quantity} cards)`;
+        if (!quantity || quantity < 1) {
+          leadError.textContent = 'Please enter a valid custom number of cards.';
+          return;
+        }
+      } else {
+        quantity = Number(selectedOption.value);
+        amount = selectedOption.dataset.price || selectedAmount;
+      }
     }
 
-    const qtyText = isCustomOrder ? ` I need ${requestedQuantity} cards.` : '';
+    const qtyText = isCustomOrder ? ` I need ${quantity} cards.` : '';
     const message = `${selectedPackageMessage}${qtyText} My name is ${name} and my phone number is ${phone}.`;
 
     if (!leadEndpoint) {
@@ -447,8 +512,8 @@
           name,
           phone,
           packageName: selectedPackageName,
-          amount: selectedAmount,
-          quantity: isCustomOrder ? requestedQuantity : 1
+          amount,
+          quantity
         })
       });
     } catch (error) {
