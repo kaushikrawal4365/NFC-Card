@@ -104,6 +104,10 @@
     .bulk-option input{margin:0;width:auto;accent-color:var(--blue)}
     .bulk-option span{font-size:14px;font-weight:600;color:var(--text)}
     .lead-form input[disabled]{background:#eef2f7;cursor:not-allowed;opacity:.7}
+    .consent{display:flex;align-items:flex-start;gap:9px;font-size:12px!important;font-weight:500!important;color:var(--muted)!important;line-height:1.45}
+    .consent input{width:auto!important;margin:3px 0 0!important;accent-color:var(--blue)}
+    .consent a{color:var(--blue);text-decoration:underline}
+    .payment-note{font-size:12px;color:var(--muted);padding:10px 12px;background:#f8faff;border-left:3px solid var(--blue);border-radius:6px}
     .lead-error{min-height:18px;color:#c0392b;font-size:12px}
     .modal-close{position:absolute;top:14px;right:14px;border:0;background:transparent;color:var(--muted);font-size:25px;line-height:1;cursor:pointer}
     .modal-close:hover{color:var(--navy)}
@@ -332,7 +336,7 @@
 <footer>
   <div class="container foot">
     <img class="brand-image" src="bb2056b6-76ee-4809-bf43-c19167f67ec0.jpg" alt="AlwaysTap logo">
-    <small>© 2026 AlwaysTap. One Tap. Endless Connections.</small>
+    <small>© 2026 AlwaysTap. One Tap. Endless Connections. <a href="legal.html">Privacy, terms and policies</a></small>
   </div>
 </footer>
 <div class="lead-modal" id="lead-modal" role="dialog" aria-modal="true" aria-labelledby="lead-title" aria-hidden="true">
@@ -372,6 +376,11 @@
           </label>
         </div>
         <input id="lead-quantity" name="quantity" type="number" min="1" step="1" placeholder="Enter custom quantity" inputmode="numeric" disabled>
+      </label>
+      <div class="payment-note">Payment instructions will be shared by our team on WhatsApp. Never share your UPI PIN, OTP, card number or banking password.</div>
+      <label class="consent">
+        <input id="lead-consent" name="consent" type="checkbox" required>
+        <span>I agree that AlwaysTap may use my name and phone number to respond to this enquiry. I have read the <a href="legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
       </label>
       <div class="lead-error" id="lead-error" aria-live="polite"></div>
       <button class="btn btn-primary" type="submit">Continue to WhatsApp →</button>
@@ -511,6 +520,7 @@
         body: JSON.stringify({
           name,
           phone,
+          consent: document.getElementById('lead-consent').checked,
           packageName: selectedPackageName,
           amount,
           quantity
