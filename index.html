@@ -44,7 +44,12 @@
     .pill{font-size:11px;font-weight:800;padding:7px 10px;border-radius:999px;background:#eff8f2;color:#1f8b4c}
     .mock-card{height:260px;border-radius:20px;background:linear-gradient(135deg,#091733,#132c63);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
     .product-gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-    .product-image{width:100%;height:260px;border-radius:20px;display:block;object-fit:contain;object-position:center;background:#fff;box-shadow:0 12px 28px rgba(23,42,77,.14)}
+    .product-flip{width:100%;height:260px;perspective:1200px;outline:none;background:transparent;transform:none}
+    .product-flip-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .8s cubic-bezier(.2,.75,.25,1)}
+    .product-flip:hover .product-flip-inner,.product-flip:focus-visible .product-flip-inner{transform:rotateY(180deg)}
+    .product-flip-face{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain;object-position:center;border-radius:20px;background:transparent;box-shadow:0 12px 28px rgba(23,42,77,.14);backface-visibility:hidden;-webkit-backface-visibility:hidden}
+    .product-flip-back{transform:rotateY(180deg)}
+    @media(prefers-reduced-motion:reduce){.product-flip-inner{transition:none}}
     .mock-card:before{content:"";position:absolute;width:230px;height:230px;border-radius:50%;border:38px solid rgba(22,119,255,.3);left:-80px;top:-70px}
     .mock-card:after{content:"";position:absolute;width:180px;height:180px;border-radius:50%;border:32px solid rgba(108,37,232,.35);right:-60px;bottom:-80px}
     .tap-icon{width:92px;height:92px;border-radius:24px;background:#fff;display:grid;place-items:center;color:var(--blue);font-size:38px;font-weight:900;box-shadow:0 15px 30px rgba(0,0,0,.2)}
@@ -193,7 +198,12 @@
           <strong>AlwaysTap Review Card</strong>
           <span class="pill">NFC enabled</span>
         </div>
-        <img class="product-image" src="127e2e82-ea33-4651-a8f2-8c0989e8487b.png" alt="AlwaysTap Google review card">
+        <div class="product-flip" tabindex="0" role="img" aria-label="AlwaysTap Google review card, front and back">
+          <div class="product-flip-inner">
+            <img class="product-flip-face" src="56b85363-8f7c-4e73-b04a-82f750999e5e.png" alt="">
+            <img class="product-flip-face product-flip-back" src="ChatGPT Image Sep 14, 2026, 12_59_04 PM.png" alt="">
+          </div>
+        </div>
         <div class="card-bottom">
           <div><span class="price">₹1,999</span><div class="note">One lifetime card • 3-year warranty</div></div>
           <a class="btn btn-primary" href="#pricing">Choose package</a>
