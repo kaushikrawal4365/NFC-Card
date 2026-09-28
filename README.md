@@ -87,21 +87,16 @@ This landing page is designed to work well on static hosting platforms such as:
 - Netlify
 - GitHub Pages
 
-## AlwaysTap client studio
+## AlwaysTap review links
 
-- Open `/dashboard` to manage client profiles. It uses the same AlwaysTap domain and branding as the marketing site.
-- Every client gets a permanent URL such as `/r/business-name-01`. Vercel rewrites all of those paths to one review-page app, so creating a client does not require adding a new HTML page or deploying the site again.
-- Client records are stored in the existing Apps Script spreadsheet in a `Clients` tab. NFC/QR visits, ratings, selected suggestions and Google click-throughs are stored in `ReviewEvents`. The existing order-lead `Sheet1` and `doPost` flow are retained.
-- The current client studio has no login, as requested. Anyone who finds `/dashboard` can view or change client records, and the public Apps Script endpoint can be called directly. Keep it for a trusted MVP trial; add access control before broader use.
-- Optional written feedback appears on the customer form but is not saved or sent to the spreadsheet.
+- Open `https://alwaystap.vercel.app/dashboard` to create a client review link.
+- A link looks like `/r/business-name-01`. The business name, Google Review URL, logo URL, theme and star-specific suggestions are carried in the link itself, so a customer can open it on any phone without a client database or Apps Script deployment.
+- Repeated business names get increasing suffixes in this browser (`business-name-01`, `business-name-02`, etc.). The dashboard's client list is saved only in the current browser. If its local browser data is cleared, the saved list is lost, but copied links continue to work.
+- Use **Copy link** to paste the URL into your NFC writing tool. Use the same URL on multiple cards for one client. Creating a client does not require a new GitHub commit or Vercel deployment.
+- Editing a client changes the link payload. Write the updated link to any card that should use the new settings; cards with an older link keep showing the settings embedded in that old link.
+- The review page lets customers select a rating and optional suggestion chips, then continue to the business's Google Review URL. AlwaysTap does not store ratings, suggestion selections, visits or Google click-throughs in this MVP.
 
-### Deploying the client studio
-
-1. In Apps Script, update the existing web app project with `google-apps-script/Code.gs`, save, and deploy a new version of the existing web app. Keep the same deployment URL used by `app.js`.
-2. Deploy the repository to Vercel. `vercel.json` handles `/dashboard` and `/r/{slug}`.
-3. Visit `https://alwaystap.vercel.app/dashboard`, create a test client, and scan its QR code from a phone.
-
-The dashboard and public review page both read and write to the shared Sheet. Creating a client only adds a Sheet row; it does not require a GitHub commit or new Vercel deployment.
+This is a no-login MVP. The dashboard's saved client list is local to the browser, and anyone who can open the dashboard can create or edit its local list. The review URL contains the business settings needed to render the page; do not put secrets in those fields.
 
 ## Notes
 

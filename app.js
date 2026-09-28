@@ -1,42 +1,292 @@
-const API_ENDPOINT='https://script.google.com/macros/s/AKfycbyrzWYHBnrIQ-XRw8NZSJGZ63vLh_uxyJhxQFuExRwgo76tvCuChgBGHgySIUx561yT/exec';
-const SETTINGS='alwaystap-settings-v1';
-const DEFAULTS={1:['Wait time','Service','Product quality','Value'],2:['Wait time','Service','Product quality','Value'],3:['Overall experience','Service','Product quality','Value'],4:['Friendly service','Product quality','Atmosphere','Value'],5:['Friendly service','Great quality','Atmosphere','Value']};
-let db={clients:[]};
-let settings=loadSettings();
-function loadSettings(){try{return JSON.parse(localStorage.getItem(SETTINGS))||{}}catch{return{}}}
-function saveSettings(){localStorage.setItem(SETTINGS,JSON.stringify(settings))}
-function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function safeUrl(s){try{const u=new URL(s);return ['http:','https:'].includes(u.protocol)?u.href:''}catch{return''}}
-function apiRequest(action,params={}){return new Promise((resolve,reject)=>{const callback=`atCallback${Date.now()}${Math.floor(Math.random()*1e6)}`,query=new URLSearchParams({action,callback,_:String(Date.now())});for(const [key,value] of Object.entries(params))query.set(key,typeof value==='string'?value:JSON.stringify(value));const script=document.createElement('script'),timer=setTimeout(()=>finish(new Error('AlwaysTap service timed out.')),15000);function finish(error,value){clearTimeout(timer);delete window[callback];script.remove();error?reject(error):resolve(value)}window[callback]=result=>result?.ok===false?finish(new Error(result.error||'Request failed.')):finish(null,result);script.onerror=()=>finish(new Error('Could not reach the AlwaysTap service.'));script.src=`${API_ENDPOINT}?${query}`;document.head.appendChild(script)})}
-function apiWrite(action,payload){const body=new URLSearchParams({action,...Object.fromEntries(Object.entries(payload).map(([key,value])=>[key,JSON.stringify(value)]))});return fetch(API_ENDPOINT,{method:'POST',mode:'no-cors',body})}
-function event(client,type,data={}){const record={type,at:Date.now(),...data};client.events??=[];client.events.push(record);return apiWrite('track',{event:{slug:client.slug,...record}}).catch(()=>{})}
-function totals(clients){const events=clients.flatMap(c=>c.events||[]);const ratings=events.filter(e=>e.type==='rating').map(e=>e.rating);return{nfc:events.filter(e=>e.type==='nfc').length,qr:events.filter(e=>e.type==='qr').length,google:events.filter(e=>e.type==='google').length,ratings,rating:ratings.length?(ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1):'—'}}
-function isReview(){return /^\/r\/[^/]+\/?$/.test(location.pathname)}
-function render(){if(isReview()){const slug=decodeURIComponent(location.pathname.split('/')[2]||'').replace(/\/$/,'');document.getElementById('app').innerHTML='<main class="review-page"><section class="review-wrap"><p class="review-foot">Loading this review page…</p></section></main>';apiRequest('client',{slug}).then(result=>{if(!result.client){renderReviewError();return}db.clients=[result.client];currentClient=result.client;renderReview();const source=new URLSearchParams(location.search).get('source')==='nfc'?'nfc':'qr';event(currentClient,source)}).catch(()=>renderReviewError('We couldn’t load this review page. Please try again or use the QR code.'))}else{renderAdmin();appendPublicAddress();apiRequest('clients').then(result=>{db.clients=result.clients||[];renderAdmin();appendPublicAddress()}).catch(()=>toast('Could not load clients from the AlwaysTap service.'))}}
-function renderReviewError(message='This review link isn’t available. Please check the link or ask the business for help.'){document.getElementById('app').innerHTML=`<main class="review-page"><section class="review-wrap"><div class="review-brand"><img class="studio-logo" src="/logo.jpg" alt="AlwaysTap"></div><div class="review-card success-card"><h2>Review page unavailable</h2><p class="muted">${escapeHtml(message)}</p></div></section></main>`}
-function renderAdmin(){document.title='AlwaysTap — Client studio';document.body.style.setProperty('--green','#1677ff');const t=totals(db.clients);const totalInteractions=t.nfc+t.qr;document.getElementById('app').innerHTML=`<main class="shell"><header class="topbar"><div class="brand"><img class="studio-logo" src="logo.jpg" alt="AlwaysTap"></div><div class="top-actions"><span class="top-label">Client studio</span><span class="avatar">AT</span></div></header><section class="intro"><div><div class="eyebrow">Your review experience</div><h1>Good morning.</h1><p>Manage clients, their review pages and performance.</p></div><button class="button" onclick="openEditor()"><span>＋</span> Add a client</button></section><div class="notice">This first version saves clients and analytics in this browser only. Data is not shared between devices until a backend is connected.</div><section class="stat-grid"><div class="stat"><div class="stat-label">Total interactions</div><div class="stat-value">${totalInteractions}</div><div class="stat-foot">NFC taps + QR scans</div></div><div class="stat"><div class="stat-label">NFC taps</div><div class="stat-value">${t.nfc}</div><div class="stat-foot">Across all clients</div></div><div class="stat"><div class="stat-label">QR scans</div><div class="stat-value">${t.qr}</div><div class="stat-foot">Across all clients</div></div><div class="stat"><div class="stat-label">Average rating</div><div class="stat-value">${t.rating}${t.rating!=='—'?' ★':''}</div><div class="stat-foot">From submitted feedback</div></div></section><section class="content-grid"><div class="panel"><div class="panel-head"><div><h2>Your clients</h2><div class="muted" style="font-size:12px">Each client keeps one permanent review link.</div></div><span class="eyebrow">${db.clients.length} total</span></div><div class="client-list">${db.clients.length?db.clients.map(clientRow).join(''):`<div class="empty"><div style="font-size:28px">✳</div><strong>Your first client starts here</strong>Create a client profile to generate their permanent review link.</div>`}</div></div><aside class="quick-column"><div class="quick-card"><div class="eyebrow">Ready for later</div><h3>Program an NFC card</h3><p>Select a client, copy their permanent link, then use a compatible NFC writing app on iPhone. Every card for that client can use this same destination.</p><button class="button small" onclick="showNfcHelp()">How it works <span>↗</span></button></div><div class="panel"><div class="eyebrow">Simple by design</div><ul class="steps"><li><span class="step-num">1</span><span>One client, one permanent link.</span></li><li><span class="step-num">2</span><span>Use the same link for every card and QR print.</span></li><li><span class="step-num">3</span><span>Edit a client once; their review page updates.</span></li></ul></div></aside></section><div class="mobile-nav">AlwaysTap · Client studio</div></main>`}
-function appendPublicAddress(){const anchor=document.querySelector('.stat-grid');if(!anchor)return;const notices=document.querySelectorAll('.notice');if(notices[0])notices[0].textContent='Client profiles and review analytics are stored in the connected AlwaysTap Google Sheet. The dashboard has no login yet.';const suggested=location.protocol==='https:'?location.origin:'';anchor.insertAdjacentHTML('beforebegin',`<div class="notice"><strong>Public website address</strong><div>Use the HTTPS domain where this app is deployed. Client links will use that domain and open the same review page.</div><div class="site-config"><input id="public-base-input" type="url" placeholder="https://alwaystap.vercel.app" value="${escapeHtml(settings.publicBase||suggested)}"><button class="button small" onclick="savePublicBase()">Save address</button></div></div>`)}
-function savePublicBase(){const input=document.getElementById('public-base-input'),url=safeUrl(input.value);if(!url||new URL(url).protocol!=='https:'){toast('Enter the deployed website address starting with https://');return}settings.publicBase=new URL(url).origin;saveSettings();render();toast('Public website address saved.')}
-function publicBase(){if(settings.publicBase)return settings.publicBase;return location.protocol==='https:'?location.origin:''}
-function publicUrl(c,source=''){const base=publicBase();return base?`${base}/r/${encodeURIComponent(c.slug)}${source?`?source=${encodeURIComponent(source)}`:''}`:''}
-function clientRow(c){const s=totals([c]),link=publicUrl(c);return`<article class="client-row"><div class="client-logo">${c.logo?`<img src="${c.logo}" alt="">`:escapeHtml(c.name.slice(0,1).toUpperCase())}</div><div><div class="client-name">${escapeHtml(c.name)}</div><div class="client-sub">${link?escapeHtml(link):'Set the deployed website address to create a shareable link'} · ${s.nfc+s.qr} interactions</div></div><div class="row-actions"><button class="icon-button" title="View analytics and link" onclick="openDetail('${c.id}')">↗</button><button class="icon-button" title="Edit client" onclick="openEditor('${c.id}')">✎</button></div></article>`}
-function openEditor(id=''){const c=db.clients.find(x=>x.id===id);document.getElementById('app').insertAdjacentHTML('beforeend',`<div class="modal-wrap" id="editor-wrap" onclick="if(event.target===this)this.remove()"><div class="modal"><div class="modal-head"><div><div class="eyebrow">${c?'Client settings':'New client'}</div><h2>${c?'Edit client':'Create a client'}</h2></div><button class="icon-button" onclick="document.getElementById('editor-wrap').remove()">×</button></div><form id="client-form" onsubmit="saveClient(event,'${id}')"><div class="form-grid"><div class="field"><label>Business name</label><input name="name" required maxlength="70" placeholder="e.g. Kanti Sweets" value="${escapeHtml(c?.name||'')}"></div><div class="field"><label>Google Review URL</label><input name="googleUrl" type="url" required placeholder="https://g.page/r/..." value="${escapeHtml(c?.googleUrl||'')}"></div><div class="field"><label>Logo image URL (optional)</label><input name="logoUrl" type="url" placeholder="https://..." value="${escapeHtml(c?.logo?.startsWith('http')?c.logo:'')}"></div><div class="field"><label>Brand color</label><input name="accent" type="color" value="${escapeHtml(c?.accent||'#1677ff')}" style="height:42px;padding:4px"></div><div class="field full"><label>Short welcome message</label><input name="tagline" maxlength="100" placeholder="Thanks for visiting us today" value="${escapeHtml(c?.tagline||'Thanks for visiting us today')}"></div><div class="field full"><label>Client logo file (optional)</label><input name="logoFile" type="file" accept="image/*"><span class="muted" style="font-size:11px">Logo is compressed before it is saved to the AlwaysTap Sheet.</span></div><div class="field full"><label>Review suggestions <span class="muted">(one per line; shown after each star rating)</span></label><div class="stars-editor">${[1,2,3,4,5].map(n=>`<div class="star-group"><label>${'★'.repeat(n)}${'☆'.repeat(5-n)}</label><textarea name="stars${n}" placeholder="One suggestion per line">${escapeHtml((c?.suggestions?.[n]||DEFAULTS[n]).join('\n'))}</textarea></div>`).join('')}</div></div></div><div class="modal-footer"><button type="button" class="button secondary" onclick="document.getElementById('editor-wrap').remove()">Cancel</button><button type="submit" class="button">${c?'Save changes':'Create client'}</button></div></form></div></div>`)}
-function compressLogo(file){return new Promise((resolve,reject)=>{if(file.size>4*1024*1024){reject(new Error('Choose a logo under 4 MB.'));return}const image=new Image(),objectUrl=URL.createObjectURL(file);image.onload=()=>{URL.revokeObjectURL(objectUrl);const scale=Math.min(1,160/Math.max(image.width,image.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);let quality=.7,data=canvas.toDataURL('image/jpeg',quality);while(data.length>6000&&quality>.25){quality-=.1;data=canvas.toDataURL('image/jpeg',quality)}if(data.length>6000)reject(new Error('That logo is too detailed to store. Try a smaller logo or paste a public image URL.'));else resolve(data)};image.onerror=()=>{URL.revokeObjectURL(objectUrl);reject(new Error('Could not read that logo image.'))};image.src=objectUrl})}
-async function saveClient(e,id){e.preventDefault();const f=e.target,fd=new FormData(f),name=String(fd.get('name')).trim(),googleUrl=safeUrl(String(fd.get('googleUrl')));if(!googleUrl){toast('Enter a valid Google review link.');return}const existing=db.clients.find(x=>x.id===id);let logo=String(fd.get('logoUrl')||'')||existing?.logo||'';const file=f.elements.logoFile.files[0];if(file){try{logo=await compressLogo(file)}catch(error){toast(error.message);return}}const c={id:existing?.id||crypto.randomUUID(),slug:existing?.slug||'',name,googleUrl,logo,accent:String(fd.get('accent')||'#1677ff'),tagline:String(fd.get('tagline')).trim(),suggestions:{},createdAt:existing?.createdAt||Date.now(),events:existing?.events||[]};for(let n=1;n<=5;n++)c.suggestions[n]=String(fd.get(`stars${n}`)||'').split('\n').map(x=>x.trim()).filter(Boolean).slice(0,12);const submit=f.querySelector('button[type="submit"]');if(submit){submit.disabled=true;submit.textContent='Saving…'}try{await apiWrite('saveClient',{client:c});let saved=null;for(let attempt=0;attempt<8&&!saved;attempt++){await new Promise(resolve=>setTimeout(resolve,500));const result=await apiRequest('clients');saved=(result.clients||[]).find(client=>client.id===c.id)}if(!saved)throw new Error('The client was not confirmed in the shared sheet. Try again.');document.getElementById('editor-wrap')?.remove();render();toast(existing?'Client saved.':(publicBase()?'Client created. Permanent link is ready.':'Client saved. Set the public website address to create its link.'))}catch(error){if(submit){submit.disabled=false;submit.textContent=existing?'Save changes':'Create client'}toast(`Could not save this client: ${error.message}`)}}
-function slugify(s){return s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,46).replace(/-$/,'')}
-function openDetail(id){const c=db.clients.find(x=>x.id===id);if(!c)return;const t=totals([c]),ev=c.events||[];const counts={};ev.filter(x=>x.type==='rating').flatMap(x=>x.suggestions||[]).forEach(x=>counts[x]=(counts[x]||0)+1);const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5),max=top[0]?.[1]||1,url=publicUrl(c),nfcUrl=publicUrl(c,'nfc');document.body.insertAdjacentHTML('beforeend',`<div class="detail-overlay" id="detail" onclick="if(event.target===this)this.remove()"><section class="detail-panel"><div class="detail-title"><div><div class="eyebrow">Client overview</div><h2>${escapeHtml(c.name)}</h2></div><button class="icon-button" onclick="document.getElementById('detail').remove()">×</button></div><p class="muted" style="font-size:12px">Created ${new Date(c.createdAt).toLocaleDateString()}</p><div class="detail-stats"><div class="detail-stat"><span class="muted">NFC taps</span><b>${t.nfc}</b></div><div class="detail-stat"><span class="muted">QR scans</span><b>${t.qr}</b></div><div class="detail-stat"><span class="muted">Average rating</span><b>${t.rating}${t.rating!=='—'?' ★':''}</b></div><div class="detail-stat"><span class="muted">Google clicks</span><b>${t.google}</b></div></div><h3 style="font-size:16px">Permanent review link</h3>${url?`<div class="linkbox"><input readonly value="${escapeHtml(url)}" id="client-url"><button class="button small" onclick="copyLink()">Copy</button></div><div style="display:flex;align-items:center;gap:14px;margin:16px 0"><div class="qr qr-box" id="qr-code" role="img" aria-label="QR code for this review link"></div><span class="muted" style="font-size:12px;line-height:1.5">Use the same URL and QR for every card assigned to this client. NFC taps use <code>?source=nfc</code> to distinguish them.</span></div><div class="linkbox"><input readonly value="${escapeHtml(nfcUrl)}" id="nfc-url"><button class="button secondary small" onclick="copyNfcLink()">NFC link</button></div>`:`<div class="notice">This page is open from a local file, so it cannot make a link phones can open. Deploy the AlwaysTap app over HTTPS to enable client URLs.</div>`}<h3 style="font-size:16px;margin-top:23px">Top selected suggestions</h3>${top.length?`<div class="suggestion-bars">${top.map(([s,n])=>`<div class="suggestion-line"><span>${escapeHtml(s)}</span><div class="bar"><i style="width:${Math.round(n/max*100)}%"></i></div><b>${n}</b></div>`).join('')}</div>`:`<p class="muted" style="font-size:12px">Suggestions will appear after customers submit ratings.</p>`}<p class="muted" style="font-size:11px">Only source, star rating, selected suggestions and Google clicks are saved. Optional written feedback is not saved.</p></section></div>`);if(url&&window.QRCode){const qrHost=document.getElementById('qr-code');if(qrHost)new QRCode(qrHost,{text:url,width:128,height:128,correctLevel:QRCode.CorrectLevel.M})}}
-function copyLink(){navigator.clipboard.writeText(document.getElementById('client-url').value).then(()=>toast('Review link copied.')).catch(()=>toast('Copy unavailable in this browser.'))}
-function copyNfcLink(){navigator.clipboard.writeText(document.getElementById('nfc-url').value).then(()=>toast('NFC destination copied.')).catch(()=>toast('Copy unavailable in this browser.'))}
-function showNfcHelp(){alert('iPhone setup for the MVP:\n\n1. Open a client and copy the NFC link.\n2. Use an NFC writing app on an iPhone with an NFC tag.\n3. Add the copied URL as a web link and write it to the tag.\n4. Test the tap; QR remains a fallback.\n\nThis dashboard does not directly write NFC tags yet. Each client’s link can be reused for all their cards.')}
-let currentClient=null,selectedRating=0,selectedSuggestions=new Set();
-function renderReview(){const slug=decodeURIComponent(location.pathname.split('/')[2]||'').replace(/\/$/,'');const c=db.clients.find(x=>x.slug===slug);document.title=c?`${c.name} — AlwaysTap`: 'Review link unavailable';if(!c){document.getElementById('app').innerHTML=`<main class="review-page"><section class="review-wrap"><div class="review-brand"><img class="studio-logo" src="/logo.jpg" alt="AlwaysTap"></div><div class="review-card success-card"><h2>This review link isn’t available</h2><p class="muted">Please check the link or ask the business for help.</p></div></section></main>`;return}currentClient=c;document.body.style.setProperty('--green',c.accent||'#1677ff');document.getElementById('app').innerHTML=`<main class="review-page"><section class="review-wrap"><div class="review-brand"><img class="studio-logo" src="/logo.jpg" alt="AlwaysTap"></div><div class="review-card" id="review-form"><div class="review-client"><div class="review-logo">${c.logo?`<img src="${escapeHtml(c.logo)}" alt="${escapeHtml(c.name)} logo">`:escapeHtml(c.name.slice(0,1).toUpperCase())}</div><h1>${escapeHtml(c.name)}</h1><p>${escapeHtml(c.tagline||'Thanks for visiting us today')}</p></div><h2>How was your experience?</h2><div class="star-picker" role="radiogroup" aria-label="Choose a rating">${[1,2,3,4,5].map(n=>`<button type="button" aria-label="${n} stars" onclick="setRating(${n})">★</button>`).join('')}</div><p class="star-hint" id="star-hint">Tap a star to get started</p><div id="suggestion-area"></div><label class="field"><span style="font-size:12px;font-weight:700">Anything else you’d like to share? <span class="muted">Optional · not saved</span></span><textarea id="feedback" maxlength="1000" placeholder="Write a few words..."></textarea></label><button class="button" onclick="submitReview()">Continue to Google <span>↗</span></button><p class="review-foot">Your feedback helps ${escapeHtml(c.name)} improve.</p></div><p class="footnote">Powered by AlwaysTap</p></section></main>`}
-function setRating(n){selectedRating=n;selectedSuggestions.clear();document.querySelectorAll('.star-picker button').forEach((b,i)=>b.classList.toggle('on',i<n));const hints={1:'We’re sorry. What could have been better?',2:'Thanks for letting us know. What stood out?',3:'What was okay, and what could improve?',4:'What did you enjoy most?',5:'Wonderful! What made it special?'};document.getElementById('star-hint').textContent=hints[n];const sugs=currentClient.suggestions[n]||[];document.getElementById('suggestion-area').innerHTML=sugs.length?`<div class="eyebrow" style="margin-bottom:8px">Pick anything that stood out</div><div class="chip-grid">${sugs.map((s,i)=>`<button class="chip" type="button" onclick="toggleSuggestion(this,${i})">${escapeHtml(s)}</button>`).join('')}</div>`:''}
-function toggleSuggestion(el,i){if(selectedSuggestions.has(i)){selectedSuggestions.delete(i);el.classList.remove('selected')}else{selectedSuggestions.add(i);el.classList.add('selected')}}
-function submitReview(){if(!selectedRating){toast('Choose a star rating first.');return}const sugs=currentClient.suggestions[selectedRating]||[],picked=[...selectedSuggestions].map(i=>sugs[i]).filter(Boolean);event(currentClient,'rating',{rating:selectedRating,suggestions:picked});const url=safeUrl(currentClient.googleUrl);if(!url){toast('This business review link needs an update.');return}event(currentClient,'google');document.getElementById('review-form').innerHTML=`<div class="success-card"><div class="success-icon">✓</div><h2>Thanks for sharing!</h2><p class="muted">You’re heading to ${escapeHtml(currentClient.name)}’s Google page.</p><a class="button" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open Google Reviews <span>↗</span></a><p class="review-foot">Your Google review is optional and posted directly through Google.</p></div>`;window.open(url,'_blank','noopener,noreferrer')}
-function toast(message){const old=document.querySelector('.toast');if(old)old.remove();document.body.insertAdjacentHTML('beforeend',`<div class="toast">${escapeHtml(message)}</div>`);setTimeout(()=>document.querySelector('.toast')?.remove(),2600)}
+const CLIENTS_KEY = 'alwaystap-clients-v2';
+const SETTINGS_KEY = 'alwaystap-settings-v2';
+const DEFAULT_PUBLIC_ORIGIN = 'https://alwaystap.vercel.app';
+const DEFAULT_SUGGESTIONS = {
+  1: ['Wait time', 'Service', 'Product quality', 'Value'],
+  2: ['Wait time', 'Service', 'Product quality', 'Value'],
+  3: ['Overall experience', 'Service', 'Product quality', 'Value'],
+  4: ['Friendly service', 'Product quality', 'Atmosphere', 'Value'],
+  5: ['Friendly service', 'Great quality', 'Atmosphere', 'Value']
+};
+
+let clients = loadJson(CLIENTS_KEY, []);
+let settings = loadJson(SETTINGS_KEY, {});
+let currentClient = null;
+let selectedRating = 0;
+let selectedSuggestions = new Set();
+
+function loadJson(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch { return fallback; }
+}
+
+function saveClients() { localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients)); }
+function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]);
+}
+
+function safeUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+  } catch { return ''; }
+}
+
+function slugify(value) {
+  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 46).replace(/-$/g, '') || 'business';
+}
+
+function nextSlug(name) {
+  const stem = slugify(name);
+  const expression = new RegExp(`^${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`);
+  const highest = clients.reduce((max, client) => {
+    const match = String(client.slug || '').match(expression);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `${stem}-${String(highest + 1).padStart(2, '0')}`;
+}
+
+function encodeConfig(client) {
+  const bytes = new TextEncoder().encode(JSON.stringify({
+    n: client.name,
+    g: client.googleUrl,
+    t: client.tagline,
+    a: client.accent,
+    l: client.logo || '',
+    s: client.suggestions
+  }));
+  let binary = '';
+  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function decodeConfig(token) {
+  const base64 = token.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - token.length % 4) % 4);
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function publicOrigin() {
+  if (settings.publicOrigin) return settings.publicOrigin;
+  return location.protocol === 'https:' ? location.origin : DEFAULT_PUBLIC_ORIGIN;
+}
+
+function publicUrl(client) {
+  const url = new URL(`/r/${encodeURIComponent(client.slug)}`, publicOrigin());
+  url.searchParams.set('c', encodeConfig(client));
+  return url.href;
+}
+
+function normalizeConfig(config, slug) {
+  if (!config || typeof config !== 'object') return null;
+  const name = String(config.n || '').trim().slice(0, 70);
+  const googleUrl = safeUrl(String(config.g || ''));
+  if (!name || !googleUrl) return null;
+  const suggestions = {};
+  for (let rating = 1; rating <= 5; rating += 1) {
+    const source = Array.isArray(config.s?.[rating]) ? config.s[rating] : [];
+    suggestions[rating] = source.map(item => String(item).trim().slice(0, 80)).filter(Boolean).slice(0, 10);
+  }
+  const logo = safeUrl(String(config.l || ''));
+  return {
+    slug,
+    name,
+    googleUrl,
+    tagline: String(config.t || 'Thanks for visiting us today').trim().slice(0, 100),
+    accent: /^#[0-9a-f]{6}$/i.test(config.a) ? config.a : '#1677ff',
+    logo,
+    suggestions
+  };
+}
+
+function isReviewPath() { return /^\/r\/[^/]+\/?$/.test(location.pathname); }
+
+function render() {
+  if (isReviewPath()) {
+    const slug = decodeURIComponent(location.pathname.split('/')[2] || '');
+    const token = new URLSearchParams(location.search).get('c');
+    try { currentClient = token ? normalizeConfig(decodeConfig(token), slug) : null; }
+    catch { currentClient = null; }
+    currentClient ? renderReview() : renderReviewError();
+    return;
+  }
+  renderAdmin();
+}
+
+function renderAdmin() {
+  document.title = 'AlwaysTap — Client studio';
+  document.body.style.setProperty('--green', '#1677ff');
+  const origin = publicOrigin();
+  document.getElementById('app').innerHTML = `
+    <main class="shell">
+      <header class="topbar"><div class="brand"><img class="studio-logo" src="/logo.jpg" alt="AlwaysTap"></div>
+        <div class="top-actions"><span class="top-label">Client studio</span><span class="avatar">AT</span></div>
+      </header>
+      <section class="intro"><div><div class="eyebrow">Your review experience</div><h1>Create a review link.</h1>
+        <p>Set up a business page, copy its link, and add it to a card with your NFC tool.</p></div>
+        <button class="button" onclick="openEditor()"><span>＋</span> Add a client</button>
+      </section>
+      <div class="notice">Each link contains that business’s review-page settings, so it works on any phone without a client database. Your client list is saved only in this browser.</div>
+      <section class="content-grid">
+        <div class="panel"><div class="panel-head"><div><h2>Your clients</h2><div class="muted" style="font-size:12px">Use the same link for every card assigned to a client.</div></div>
+          <span class="eyebrow">${clients.length} total</span></div>
+          <div class="client-list">${clients.length ? clients.map(clientRow).join('') : `<div class="empty"><div style="font-size:28px">✳</div><strong>Your first client starts here</strong>Create a profile to generate its review link.</div>`}</div>
+        </div>
+        <aside class="quick-column"><div class="quick-card"><div class="eyebrow">Ready for your NFC tool</div><h3>Copy and write</h3>
+          <p>Copy a client’s permanent review link, then write it to an NFC card using the NFC tool you already use.</p>
+          <p>When someone opens the link, they can choose a star rating, tap suggestions, and continue to that business’s Google Reviews page.</p>
+        </div><div class="panel"><div class="eyebrow">Simple by design</div><ul class="steps">
+          <li><span class="step-num">1</span><span>Create one review link for each client.</span></li>
+          <li><span class="step-num">2</span><span>Copy the link into your NFC writing tool.</span></li>
+          <li><span class="step-num">3</span><span>The customer can continue to Google Reviews.</span></li>
+        </ul></div></aside>
+      </section><div class="mobile-nav">AlwaysTap · Client studio</div>
+    </main>`;
+}
+
+function clientRow(client) {
+  const url = publicUrl(client);
+  return `<article class="client-row"><div class="client-logo">${client.logo ? `<img src="${escapeHtml(client.logo)}" alt="">` : escapeHtml(client.name.slice(0, 1).toUpperCase())}</div>
+    <div><div class="client-name">${escapeHtml(client.name)}</div><div class="client-sub">${escapeHtml(client.slug)} · ${escapeHtml(url)}</div></div>
+    <div class="row-actions"><button class="button small secondary" onclick="copyClientLink('${escapeHtml(client.id)}')">Copy link</button>
+      <button class="icon-button" title="Edit client" onclick="openEditor('${escapeHtml(client.id)}')">✎</button></div></article>`;
+}
+
+function openEditor(id = '') {
+  const client = clients.find(item => item.id === id);
+  const fields = Array.from({ length: 5 }, (_, index) => {
+    const rating = index + 1;
+    const values = client?.suggestions?.[rating] || DEFAULT_SUGGESTIONS[rating];
+    return `<div class="star-group"><label>${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}</label>
+      <textarea name="stars${rating}" maxlength="700" placeholder="One suggestion per line">${escapeHtml(values.join('\n'))}</textarea></div>`;
+  }).join('');
+  document.getElementById('app').insertAdjacentHTML('beforeend', `
+    <div class="modal-wrap" id="editor-wrap" onclick="if(event.target===this)this.remove()"><div class="modal">
+      <div class="modal-head"><div><div class="eyebrow">${client ? 'Client settings' : 'New client'}</div><h2>${client ? 'Edit client' : 'Create a client'}</h2></div>
+        <button class="icon-button" onclick="document.getElementById('editor-wrap').remove()">×</button></div>
+      <form id="client-form" onsubmit="saveClient(event,'${escapeHtml(id)}')"><div class="form-grid">
+        <div class="field"><label>Business name</label><input name="name" required maxlength="70" placeholder="e.g. Kanti Sweets" value="${escapeHtml(client?.name || '')}"></div>
+        <div class="field"><label>Google Review URL</label><input name="googleUrl" type="url" required placeholder="https://g.page/r/..." value="${escapeHtml(client?.googleUrl || '')}"></div>
+        <div class="field"><label>Logo image URL (optional)</label><input name="logo" type="url" placeholder="https://..." value="${escapeHtml(client?.logo || '')}"></div>
+        <div class="field"><label>Brand color</label><input name="accent" type="color" value="${escapeHtml(client?.accent || '#1677ff')}" style="height:42px;padding:4px"></div>
+        <div class="field full"><label>Short welcome message</label><input name="tagline" maxlength="100" value="${escapeHtml(client?.tagline || 'Thanks for visiting us today')}"></div>
+        <div class="field full"><label>Suggestions shown for each star rating <span class="muted">(one per line)</span></label><div class="stars-editor">${fields}</div></div>
+      </div><div class="modal-footer"><button type="button" class="button secondary" onclick="document.getElementById('editor-wrap').remove()">Cancel</button>
+        <button type="submit" class="button">${client ? 'Save changes' : 'Create review link'}</button></div></form>
+    </div></div>`);
+}
+
+function saveClient(event, id) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = new FormData(form);
+  const name = String(values.get('name') || '').trim();
+  const googleUrl = safeUrl(String(values.get('googleUrl') || '').trim());
+  const logo = safeUrl(String(values.get('logo') || '').trim());
+  if (!name || !googleUrl) { toast('Enter a business name and a valid Google Review URL.'); return; }
+  if (values.get('logo') && !logo) { toast('The logo must be a public HTTP or HTTPS image URL.'); return; }
+  const existing = clients.find(item => item.id === id);
+  const suggestions = {};
+  for (let rating = 1; rating <= 5; rating += 1) {
+    suggestions[rating] = String(values.get(`stars${rating}`) || '').split('\n')
+      .map(item => item.trim().slice(0, 80)).filter(Boolean).slice(0, 10);
+  }
+  const client = {
+    id: existing?.id || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
+    slug: existing?.slug || nextSlug(name), name, googleUrl, logo,
+    accent: String(values.get('accent') || '#1677ff'),
+    tagline: String(values.get('tagline') || '').trim().slice(0, 100), suggestions
+  };
+  const url = publicUrl(client);
+  if (url.length > 7500) { toast('This link is too long. Shorten the suggestions and try again.'); return; }
+  if (existing) clients = clients.map(item => item.id === id ? client : item);
+  else clients.unshift(client);
+  saveClients();
+  document.getElementById('editor-wrap')?.remove();
+  renderAdmin();
+  showCreatedLink(client, url);
+}
+
+function showCreatedLink(client, url) {
+  document.getElementById('app').insertAdjacentHTML('beforeend', `
+    <div class="modal-wrap" id="link-wrap" onclick="if(event.target===this)this.remove()"><div class="modal">
+      <div class="modal-head"><div><div class="eyebrow">Link ready</div><h2>${escapeHtml(client.name)}</h2></div>
+        <button class="icon-button" onclick="document.getElementById('link-wrap').remove()">×</button></div>
+      <p class="muted">This link includes the client’s page settings and works on other phones. Copy it into your NFC writing tool.</p>
+      <div class="linkbox"><input id="created-url" readonly value="${escapeHtml(url)}"><button class="button small" onclick="copyCreatedLink()">Copy link</button></div>
+      <a class="button" href="${escapeHtml(url)}" target="_blank" rel="noopener">Preview review page ↗</a>
+    </div></div>`);
+}
+
+async function copyText(value) {
+  try { await navigator.clipboard.writeText(value); toast('Link copied.'); }
+  catch {
+    const input = document.createElement('textarea');
+    input.value = value; input.style.position = 'fixed'; input.style.opacity = '0';
+    document.body.appendChild(input); input.select();
+    const copied = document.execCommand('copy'); input.remove();
+    toast(copied ? 'Link copied.' : 'Copy failed. Select and copy the link manually.');
+  }
+}
+
+function copyCreatedLink() { copyText(document.getElementById('created-url').value); }
+function copyClientLink(id) { const client = clients.find(item => item.id === id); if (client) copyText(publicUrl(client)); }
+
+function renderReviewError() {
+  document.title = 'Review link unavailable — AlwaysTap';
+  document.getElementById('app').innerHTML = `<main class="review-page"><section class="review-wrap"><div class="review-brand"><img class="studio-logo" src="/logo.jpg" alt="AlwaysTap"></div>
+    <div class="review-card success-card"><h2>This review link is incomplete</h2><p class="muted">Ask the business for a fresh link.</p></div></section></main>`;
+}
+
+function renderReview() {
+  document.title = `${currentClient.name} — AlwaysTap`;
+  document.body.style.setProperty('--green', currentClient.accent);
+  document.getElementById('app').innerHTML = `<main class="review-page"><section class="review-wrap">
+    <div class="review-brand"><img class="studio-logo" src="/logo.jpg" alt="AlwaysTap"></div>
+    <div class="review-card" id="review-form"><div class="review-client">
+      <div class="review-logo">${currentClient.logo ? `<img src="${escapeHtml(currentClient.logo)}" alt="${escapeHtml(currentClient.name)} logo">` : escapeHtml(currentClient.name.slice(0, 1).toUpperCase())}</div>
+      <h1>${escapeHtml(currentClient.name)}</h1><p>${escapeHtml(currentClient.tagline || 'Thanks for visiting us today')}</p></div>
+      <h2>How was your experience?</h2><div class="star-picker" role="radiogroup" aria-label="Choose a rating">
+        ${[1, 2, 3, 4, 5].map(rating => `<button type="button" aria-label="${rating} stars" onclick="setRating(${rating})">★</button>`).join('')}
+      </div><p class="star-hint" id="star-hint">Tap a star to get started</p><div id="suggestion-area"></div>
+      <button class="button" onclick="continueToGoogle()">Continue to Google <span>↗</span></button>
+      <p class="review-foot">Your Google review is optional and posted directly through Google.</p>
+    </div><p class="footnote">Powered by AlwaysTap</p></section></main>`;
+}
+
+function setRating(rating) {
+  selectedRating = rating;
+  selectedSuggestions.clear();
+  document.querySelectorAll('.star-picker button').forEach((button, index) => button.classList.toggle('on', index < rating));
+  const hints = { 1: 'We’re sorry. What could have been better?', 2: 'Thanks for letting us know. What stood out?',
+    3: 'What was okay, and what could improve?', 4: 'What did you enjoy most?', 5: 'Wonderful! What made it special?' };
+  document.getElementById('star-hint').textContent = hints[rating];
+  const suggestions = currentClient.suggestions[rating] || [];
+  document.getElementById('suggestion-area').innerHTML = suggestions.length
+    ? `<div class="eyebrow" style="margin-bottom:8px">Pick anything that stood out</div><div class="chip-grid">${suggestions.map((item, index) => `<button class="chip" type="button" onclick="toggleSuggestion(this,${index})">${escapeHtml(item)}</button>`).join('')}</div>`
+    : '';
+}
+
+function toggleSuggestion(button, index) {
+  if (selectedSuggestions.has(index)) { selectedSuggestions.delete(index); button.classList.remove('selected'); }
+  else { selectedSuggestions.add(index); button.classList.add('selected'); }
+}
+
+function continueToGoogle() {
+  if (!selectedRating) { toast('Choose a star rating first.'); return; }
+  window.location.assign(currentClient.googleUrl);
+}
+
+function toast(message) {
+  document.querySelector('.toast')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `<div class="toast">${escapeHtml(message)}</div>`);
+  setTimeout(() => document.querySelector('.toast')?.remove(), 2600);
+}
+
 render();
-
-
-
-
-
