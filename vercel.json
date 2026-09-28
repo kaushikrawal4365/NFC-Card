@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/r/:slug", "destination": "/studio.html" },
+    { "source": "/r/:slug/", "destination": "/studio.html" },
+    { "source": "/dashboard", "destination": "/studio.html" }
+  ]
+}

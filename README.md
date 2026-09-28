@@ -87,6 +87,22 @@ This landing page is designed to work well on static hosting platforms such as:
 - Netlify
 - GitHub Pages
 
+## AlwaysTap client studio
+
+- Open `/dashboard` to manage client profiles. It uses the same AlwaysTap domain and branding as the marketing site.
+- Every client gets a permanent URL such as `/r/business-name-01`. Vercel rewrites all of those paths to one review-page app, so creating a client does not require adding a new HTML page or deploying the site again.
+- Client records are stored in the existing Apps Script spreadsheet in a `Clients` tab. NFC/QR visits, ratings, selected suggestions and Google click-throughs are stored in `ReviewEvents`. The existing order-lead `Sheet1` and `doPost` flow are retained.
+- The current client studio has no login, as requested. Anyone who finds `/dashboard` can view or change client records, and the public Apps Script endpoint can be called directly. Keep it for a trusted MVP trial; add access control before broader use.
+- Optional written feedback appears on the customer form but is not saved or sent to the spreadsheet.
+
+### Deploying the client studio
+
+1. In Apps Script, update the existing web app project with `google-apps-script/Code.gs`, save, and deploy a new version of the existing web app. Keep the same deployment URL used by `app.js`.
+2. Deploy the repository to Vercel. `vercel.json` handles `/dashboard` and `/r/{slug}`.
+3. Visit `https://alwaystap.vercel.app/dashboard`, create a test client, and scan its QR code from a phone.
+
+The dashboard and public review page both read and write to the shared Sheet. Creating a client only adds a Sheet row; it does not require a GitHub commit or new Vercel deployment.
+
 ## Notes
 
 - The site is tuned for responsiveness across desktop, tablet, and mobile screens.
